@@ -18,6 +18,16 @@ engine = pyttsx3.init()
 # Define a set of hardcoded words for testing
 target_words = {"hello", "autism", "speech", "recognition", "python", "therapy"}
 
+# Human-friendly pronunciation guide
+human_pronunciations = {
+    "hello": "Say 'hello' like 'heh-low'.",
+    "autism": "Say 'autism' like 'aw-tiz-um'.",
+    "speech": "Say 'speech' like 'spee-ch'.",
+    "recognition": "Say 'recognition' like 'rek-uhg-nish-uhn'.",
+    "python": "Say 'python' like 'pie-thon'.",
+    "therapy": "Say 'therapy' like 'thair-uh-pee'."
+}
+
 # Set the correct Vosk model path
 model_path = "E:\\Studies\\Extra\\Competitions\\Ongoing\\Rugged\\ATD_SpeechTherapy\\model\\vosk_model"
 if not os.path.exists(model_path):
@@ -28,44 +38,29 @@ if not os.path.exists(model_path):
 model = vosk.Model(model_path)
 recognizer = vosk.KaldiRecognizer(model, 16000)
 
-# Function to get phonemes of a word
-def get_phonemes(word):
-    return pron_dict.get(word.lower(), [])
-
-# Function to find the closest match from the predefined list (stricter cutoff to avoid bad matches)
+# Function to find the closest match for any spoken word
 def get_closest_match(spoken_word):
-    matches = get_close_matches(spoken_word, target_words, n=1, cutoff=0.7)
+    matches = get_close_matches(spoken_word, target_words, n=1, cutoff=0.5)  # Loose match to detect similarities
     return matches[0] if matches else None
 
-# Function to check pronunciation, including partial matches
+# Function to check pronunciation and provide a natural explanation
 def check_pronunciation(spoken_word):
     closest_match = get_closest_match(spoken_word)
     
     if closest_match:
-        correct_phonemes = get_phonemes(closest_match)
-        spoken_phonemes = get_phonemes(spoken_word)
-
         if spoken_word == closest_match:
             return f"'{spoken_word}' is pronounced correctly."
-        
-        elif spoken_phonemes and correct_phonemes:
-            # If the spoken phonemes match at least partially with the correct phonemes
-            if len(spoken_phonemes[0]) > 0 and spoken_phonemes[0][0] in correct_phonemes[0]:
-                return f"Almost there! You said '{spoken_word}', but try saying it fully: {' '.join(correct_phonemes[0])}"
-            else:
-                return f"'{spoken_word}' is mispronounced. Try saying: {' '.join(correct_phonemes[0])}"
-
         else:
-            return f"'{spoken_word}' is mispronounced. Try again."
+            return f"Almost there! You said '{spoken_word}', but try saying it like this: {human_pronunciations[closest_match]}"
     
-    return None  # Ignore words that are not similar to the predefined words
+    return f"'{spoken_word}' is not recognized. Try pronouncing a word similar to: {', '.join(target_words)}"
 
 # Function to provide feedback without causing self-recognition
 def provide_feedback(message):
     print(message)
     engine.say(message)
     engine.runAndWait()
-    time.sleep(2)  # Delay prevents the system from recognizing its own speech output
+    time.sleep(2)  # Prevents system voice from being taken as input
 
 # Start listening for speech input
 print("\nListening for speech... Say 'Begin' to start.")
@@ -75,7 +70,7 @@ stream = pa.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, fra
 stream.start_stream()
 
 activation_confirmed = False
-last_spoken_word = None  # Track the last word spoken to avoid repetition
+last_spoken_word = None  # Track last word to prevent repetition
 
 while True:
     data = stream.read(4000, exception_on_overflow=False)
@@ -94,7 +89,7 @@ while True:
                     print("Activation confirmed. Please say a target word.")
                 continue  # Ignore any other speech until "Begin" is spoken
 
-            # Split words and process only relevant ones
+            # Split words and process each one
             words = text.split()
 
             for word in words:
