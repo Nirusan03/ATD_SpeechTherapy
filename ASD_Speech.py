@@ -5,6 +5,8 @@ import nltk
 from nltk.corpus import cmudict
 import pyttsx3
 import os
+import time
+from difflib import get_close_matches
 
 # Ensure CMU Pronouncing Dictionary is downloaded
 nltk.download('cmudict')
@@ -16,7 +18,7 @@ engine = pyttsx3.init()
 # Define a set of hardcoded words for testing
 target_words = {"hello", "autism", "speech", "recognition", "python", "therapy"}
 
-# Ensure Vosk model path is correct
+# Set the correct Vosk model path
 model_path = "E:\\Studies\\Extra\\Competitions\\Ongoing\\Rugged\\ATD_SpeechTherapy\\model\\vosk_model"
 if not os.path.exists(model_path):
     print("Error: Vosk model not found! Please check your model path.")
@@ -30,35 +32,54 @@ recognizer = vosk.KaldiRecognizer(model, 16000)
 def get_phonemes(word):
     return pron_dict.get(word.lower(), [])
 
-# Function to check pronunciation
-def check_pronunciation(spoken_word):
-    if spoken_word in target_words:
-        correct_phonemes = get_phonemes(spoken_word)
-        if not correct_phonemes:
-            return f"Pronunciation data not available for '{spoken_word}'."
-        
-        # Providing correct pronunciation
-        phoneme_string = " ".join(correct_phonemes[0])
-        return f"Correct pronunciation of '{spoken_word}': {phoneme_string}"
-    
-    return f"'{spoken_word}' is not in the predefined words list."
+# Function to find the closest match from the predefined list (stricter cutoff to avoid bad matches)
+def get_closest_match(spoken_word):
+    matches = get_close_matches(spoken_word, target_words, n=1, cutoff=0.7)
+    return matches[0] if matches else None
 
-# Function to provide feedback
+# Function to check pronunciation, including partial matches
+def check_pronunciation(spoken_word):
+    closest_match = get_closest_match(spoken_word)
+    
+    if closest_match:
+        correct_phonemes = get_phonemes(closest_match)
+        spoken_phonemes = get_phonemes(spoken_word)
+
+        if spoken_word == closest_match:
+            return f"'{spoken_word}' is pronounced correctly."
+        
+        elif spoken_phonemes and correct_phonemes:
+            # If the spoken phonemes match at least partially with the correct phonemes
+            if len(spoken_phonemes[0]) > 0 and spoken_phonemes[0][0] in correct_phonemes[0]:
+                return f"Almost there! You said '{spoken_word}', but try saying it fully: {' '.join(correct_phonemes[0])}"
+            else:
+                return f"'{spoken_word}' is mispronounced. Try saying: {' '.join(correct_phonemes[0])}"
+
+        else:
+            return f"'{spoken_word}' is mispronounced. Try again."
+    
+    return None  # Ignore words that are not similar to the predefined words
+
+# Function to provide feedback without causing self-recognition
 def provide_feedback(message):
-    print(f"🔊 {message}")
+    print(message)
     engine.say(message)
     engine.runAndWait()
+    time.sleep(2)  # Delay prevents the system from recognizing its own speech output
 
 # Start listening for speech input
-print("\nListening for speech... Speak now!")
+print("\nListening for speech... Say 'Begin' to start.")
 
 pa = pyaudio.PyAudio()
 stream = pa.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8000)
 stream.start_stream()
 
+activation_confirmed = False
+last_spoken_word = None  # Track the last word spoken to avoid repetition
+
 while True:
     data = stream.read(4000, exception_on_overflow=False)
-    
+
     if recognizer.AcceptWaveform(data):
         result = json.loads(recognizer.Result())
         text = result.get("text", "").strip().lower()
@@ -66,15 +87,19 @@ while True:
         if text:
             print(f"You said: {text}")
 
-            # Split words and process each separately
-            words = text.split()
-            valid_words = [word for word in words if word in target_words]
+            # Require user to say "Begin" before processing any words
+            if not activation_confirmed:
+                if "begin" in text:
+                    activation_confirmed = True
+                    print("Activation confirmed. Please say a target word.")
+                continue  # Ignore any other speech until "Begin" is spoken
 
-            if valid_words:
-                for word in valid_words:
+            # Split words and process only relevant ones
+            words = text.split()
+
+            for word in words:
+                if word != last_spoken_word:  # Avoid repeating feedback for the same word
                     feedback = check_pronunciation(word)
-                    provide_feedback(feedback)
-            else:
-                provide_feedback(f"No correct words detected. Try again.")
-        else:
-            print("No speech detected. Try speaking clearly.")
+                    if feedback:
+                        provide_feedback(feedback)
+                    last_spoken_word = word  # Store last spoken word to prevent repetition
