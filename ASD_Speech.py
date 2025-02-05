@@ -9,7 +9,18 @@ import time
 from difflib import get_close_matches
 
 class PronunciationTrainer:
+    """
+    A pronunciation training system using Vosk offline speech recognition.
+    The system compares spoken words with a predefined list, identifies mispronunciations,
+    and provides human-friendly pronunciation guidance.
+    """
+
     def __init__(self, model_path):
+        """
+        Initializes the pronunciation trainer with speech recognition and text-to-speech.
+
+        :param model_path: Path to the Vosk speech recognition model.
+        """
         # Load CMU Pronouncing Dictionary
         nltk.download('cmudict')
         self.pron_dict = cmudict.dict()
@@ -45,16 +56,31 @@ class PronunciationTrainer:
         self.last_spoken_word = None  # Track the last word spoken to avoid repetition
 
     def get_phonemes(self, word):
-        """Returns the phonemes for a given word from CMU Pronouncing Dictionary."""
+        """
+        Retrieves the phonemes for a given word from the CMU Pronouncing Dictionary.
+
+        :param word: The word to retrieve phonemes for.
+        :return: A list of phonemes if available, otherwise an empty list.
+        """
         return self.pron_dict.get(word.lower(), [])
 
     def get_closest_match(self, spoken_word):
-        """Finds the closest word match from the predefined list."""
+        """
+        Finds the closest matching word from the predefined list of words.
+
+        :param spoken_word: The word spoken by the user.
+        :return: The closest matching word from the predefined list, or None if no close match is found.
+        """
         matches = get_close_matches(spoken_word, self.target_words, n=1, cutoff=0.5)
         return matches[0] if matches else None
 
     def check_pronunciation(self, spoken_word):
-        """Checks pronunciation and provides human-friendly guidance."""
+        """
+        Checks the pronunciation of the spoken word and provides feedback.
+
+        :param spoken_word: The word spoken by the user.
+        :return: A message indicating correct pronunciation or guiding towards correct pronunciation.
+        """
         closest_match = self.get_closest_match(spoken_word)
         
         if closest_match:
@@ -66,14 +92,21 @@ class PronunciationTrainer:
         return f"'{spoken_word}' is not recognized. Try pronouncing a word similar to: {', '.join(self.target_words)}"
 
     def provide_feedback(self, message):
-        """Provides verbal and printed feedback."""
+        """
+        Provides spoken and printed feedback to the user.
+
+        :param message: The message to be spoken and displayed.
+        """
         print(message)
         self.engine.say(message)
         self.engine.runAndWait()
         time.sleep(2)  # Prevents system voice from being taken as input
 
     def listen_and_process(self):
-        """Main loop for processing speech input."""
+        """
+        Listens to the user's speech and processes it in real-time. 
+        Requires the user to say 'Begin' to start.
+        """
         print("\nListening for speech... Say 'Begin' to start.")
 
         while True:
